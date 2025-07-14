@@ -8,10 +8,11 @@ import { IndexItem } from './types';
 import * as zlib from 'zlib';
 
 export interface OperationLogEntry {
-    operation: 'insert' | 'upsert' | 'delete';
+    operation: 'insert' | 'upsert' | 'delete' | 'update' | 'deleteMultiple';
     timestamp?: number;
     item?: IndexItem;
     id?: string;
+    ids?: string[];
 }
 
 export interface OperationLogOptions {

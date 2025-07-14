@@ -15,7 +15,7 @@ import { OperationQueue } from './OperationQueue';
 import { Validator, VectorValidationOptions, MetadataSchema, ValidationError } from './Validator';
 import { CleanupManager, CleanupStats } from './CleanupManager';
 import { LazyIndex, LazyIndexOptions } from './LazyIndex';
-import { WAL, WALEntry, WALOptions, walManager } from './WAL';
+import { WAL, WALEntry, WALOptions, WALStats, walManager } from './WAL';
 import { OperationsLog, OperationLogOptions, operationsLogManager, CompactionResult } from './OperationsLog';
 import { HNSWManager, HNSWOptions, hnswIndexManager } from './HNSWManager';
 import { DataIntegrity, IntegrityCheckResult, DataIntegrityOptions, dataIntegrity } from './DataIntegrity';
@@ -49,6 +49,7 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
     private readonly _indexName: string;
     private readonly _operationsLogName: string = 'operations.log';
     private _hnswManager?: HNSWManager;
+    private _dataIntegrityOptions?: DataIntegrityOptions;
     private _data?: InMemoryIndexData;
     private _update?: InMemoryIndexData;
     private _bm25Engine: any;
@@ -92,6 +93,16 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
         // Handle delete operations
         this._operationQueue.setHandler('delete', async (data: { id: string }) => {
             return await this.performDelete(data.id);
+        });
+
+        // Handle deleteMultiple operations
+        this._operationQueue.setHandler('deleteMultiple', async (data: { ids: string[] }) => {
+            return await this.performDeleteMultiple(data.ids);
+        });
+
+        // Handle update operations
+        this._operationQueue.setHandler('update', async (data: { update: Partial<IndexItem<TMetadata>> & { id: string } }) => {
+            return await this.performUpdate(data.update);
         });
 
         // Handle custom operations
@@ -338,6 +349,178 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
     }
 
     /**
+     * Deletes multiple items from the index.
+     * @param ids Array of item IDs to delete.
+     */
+    public async deleteItems(ids: string[]): Promise<void> {
+        // Queue the operation for batch processing
+        return await this._operationQueue.enqueue('deleteMultiple', { ids }, ids.length);
+    }
+
+    /**
+     * Internal method to perform batch delete
+     */
+    private async performDeleteMultiple(ids: string[]): Promise<void> {
+        const updateInProgress = !!this._update;
+        if (!updateInProgress) {
+            await this.beginUpdate();
+        }
+        
+        try {
+            for (const id of ids) {
+                // Get item to check for metadata file
+                const item = this._update!.items.get(id);
+                if (item && item.metadataFile) {
+                    // Delete associated metadata file
+                    await CleanupManager.deleteMetadataFile(this._folderPath, item.metadataFile);
+                }
+                
+                // Remove from items map
+                this._update!.items.delete(id);
+                
+                // Remove from HNSW index if available
+                if (this._hnswManager) {
+                    try {
+                        this._hnswManager.removeVector(id);
+                    } catch (err) {
+                        console.warn(`Failed to remove ${id} from HNSW index:`, err);
+                    }
+                }
+            }
+            
+            // Write to WAL if enabled
+            if (this._wal) {
+                await this._wal.writeEntry({
+                    id: `batch-delete-${Date.now()}`,
+                    timestamp: Date.now(),
+                    operation: 'deleteMultiple',
+                    data: { ids }
+                });
+            }
+            
+            // Log to operations log
+            if (this._operationsLog) {
+                await this._operationsLog.append({ 
+                    operation: 'deleteMultiple', 
+                    ids,
+                    timestamp: Date.now()
+                });
+            }
+            
+            if (!updateInProgress) {
+                await this.endUpdate();
+            }
+        } catch (err) {
+            if (!updateInProgress) {
+                await this.cancelUpdate();
+            }
+            throw err;
+        }
+    }
+
+    /**
+     * Updates an existing item in the index.
+     * @param update Partial item with required id field.
+     */
+    public async updateItem<TItemMetadata extends TMetadata = TMetadata>(update: Partial<IndexItem<TItemMetadata>> & { id: string }): Promise<void> {
+        // Queue the operation for processing
+        return await this._operationQueue.enqueue('update', { update }, 1);
+    }
+
+    /**
+     * Internal method to perform item update
+     */
+    private async performUpdate<TItemMetadata extends TMetadata = TMetadata>(update: Partial<IndexItem<TItemMetadata>> & { id: string }): Promise<void> {
+        const updateInProgress = !!this._update;
+        if (!updateInProgress) {
+            await this.beginUpdate();
+        }
+        
+        try {
+            const existingItem = this._update!.items.get(update.id);
+            if (!existingItem) {
+                throw new Error(`Item with id ${update.id} not found`);
+            }
+            
+            // Merge update with existing item
+            const updatedItem: IndexItem<TItemMetadata> = {
+                ...existingItem,
+                ...update,
+                id: update.id, // Ensure ID is not changed
+                metadata: {
+                    ...(existingItem.metadata || {}),
+                    ...(update.metadata || {})
+                } as TItemMetadata
+            };
+            
+            // Validate vector if provided
+            if (update.vector) {
+                try {
+                    Validator.validateVector(update.vector, this._update!.vectorOptions || {});
+                } catch (err) {
+                    if (err instanceof ValidationError) {
+                        throw new Error(`Vector validation failed: ${err.message}`);
+                    }
+                    throw err;
+                }
+                updatedItem.norm = ItemSelector.normalize(update.vector);
+            }
+            
+            // Validate metadata if provided
+            if (update.metadata && this._update!.metadata_config?.schema) {
+                try {
+                    Validator.validateMetadata(update.metadata, this._update!.metadata_config.schema);
+                } catch (err) {
+                    if (err instanceof ValidationError) {
+                        throw new Error(`Metadata validation failed: ${err.message}`);
+                    }
+                    throw err;
+                }
+            }
+            
+            // Update in HNSW index if vector changed
+            if (update.vector && this._hnswManager) {
+                try {
+                    this._hnswManager.updateVector(update.id, update.vector);
+                } catch (err) {
+                    console.warn(`Failed to update vector in HNSW index:`, err);
+                }
+            }
+            
+            // Update item
+            this._update!.items.set(update.id, updatedItem as IndexItem);
+            
+            // Write to WAL if enabled
+            if (this._wal) {
+                await this._wal.writeEntry({
+                    id: update.id,
+                    timestamp: Date.now(),
+                    operation: 'update',
+                    data: updatedItem
+                });
+            }
+            
+            // Log to operations log
+            if (this._operationsLog) {
+                await this._operationsLog.append({ 
+                    operation: 'update', 
+                    item: updatedItem,
+                    timestamp: Date.now()
+                });
+            }
+            
+            if (!updateInProgress) {
+                await this.endUpdate();
+            }
+        } catch (err) {
+            if (!updateInProgress) {
+                await this.cancelUpdate();
+            }
+            throw err;
+        }
+    }
+
+    /**
      * Ends an update to the index.
      * @remarks
      * This method saves the index to disk.
@@ -500,9 +683,10 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
      * @remarks
      * This method loads the index into memory and returns all its items. A copy of the items
      * array is returned so no modifications should be made to the array.
+     * @param options Optional pagination options
      * @returns Array of all items in the index.
      */
-    public async listItems<TItemMetadata extends TMetadata = TMetadata>(): Promise<IndexItem<TItemMetadata>[]> {
+    public async listItems<TItemMetadata extends TMetadata = TMetadata>(options?: { page?: number; pageSize?: number }): Promise<IndexItem<TItemMetadata>[]> {
         const lock = await lockManager.acquireReadLock(this._folderPath);
         try {
             await this.loadIndexData();
@@ -513,10 +697,27 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
                 for await (const item of this._lazyIndex.iterateItems()) {
                     items.push(item as any);
                 }
+                
+                // Apply pagination if options provided
+                if (options?.page && options?.pageSize) {
+                    const startIndex = (options.page - 1) * options.pageSize;
+                    const endIndex = startIndex + options.pageSize;
+                    return items.slice(startIndex, endIndex);
+                }
+                
                 return items;
             }
             
-            return Array.from(this._data!.items.values()) as any;
+            const allItems = Array.from(this._data!.items.values()) as IndexItem<TItemMetadata>[];
+            
+            // Apply pagination if options provided
+            if (options?.page && options?.pageSize) {
+                const startIndex = (options.page - 1) * options.pageSize;
+                const endIndex = startIndex + options.pageSize;
+                return allItems.slice(startIndex, endIndex);
+            }
+            
+            return allItems;
         } finally {
             await lock.release();
         }
@@ -561,11 +762,37 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
      * This method loads the index into memory and returns the top k items that are most similar.
      * An optional filter can be applied to the metadata of the items.
      * @param vector Vector to query against.
-     * @param topK Number of items to return.
-     * @param filter Optional. Filter to apply.
-     * @returns Similar items to the vector that matche the supplied filter.
+     * @param topK Number of items to return OR text query if string.
+     * @param filter Optional. Filter to apply OR topK if number.
+     * @param query Optional. Text query for BM25 search.
+     * @param isBm25 Optional. Enable BM25 text search.
+     * @param alpha Optional. Weight for combining vector and text scores.
+     * @returns Similar items to the vector that match the supplied filter.
      */
-    public async queryItems<TItemMetadata extends TMetadata = TMetadata>(vector: number[], query: string, topK: number, filter?: MetadataFilter, isBm25?: boolean, alpha: number = 1.0): Promise<QueryResult<TItemMetadata>[]> {
+    public async queryItems<TItemMetadata extends TMetadata = TMetadata>(
+        vector: number[], 
+        topKOrQuery: number | string, 
+        filterOrTopK?: MetadataFilter | number, 
+        queryOrFilter?: string | MetadataFilter, 
+        isBm25?: boolean, 
+        alpha: number = 1.0
+    ): Promise<QueryResult<TItemMetadata>[]> {
+        // Handle backward compatibility - detect which signature is being used
+        let query: string;
+        let topK: number;
+        let filter: MetadataFilter | undefined;
+        
+        if (typeof topKOrQuery === 'number') {
+            // Original signature: queryItems(vector, topK, filter)
+            topK = topKOrQuery;
+            filter = filterOrTopK as MetadataFilter | undefined;
+            query = '';
+        } else {
+            // New signature: queryItems(vector, query, topK, filter, isBm25, alpha)
+            query = topKOrQuery;
+            topK = filterOrTopK as number;
+            filter = queryOrFilter as MetadataFilter | undefined;
+        }
         const lock = await lockManager.acquireReadLock(this._folderPath);
         try {
             await this.loadIndexData();
@@ -836,6 +1063,7 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
             switch (op.operation) {
                 case 'insert':
                 case 'upsert':
+                case 'update':
                     if (op.item) {
                         this._data.items.set(op.item.id, op.item);
                     }
@@ -843,6 +1071,13 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
                 case 'delete':
                     if (op.id) {
                         this._data.items.delete(op.id);
+                    }
+                    break;
+                case 'deleteMultiple':
+                    if (op.ids) {
+                        for (const id of op.ids) {
+                            this._data.items.delete(id);
+                        }
                     }
                     break;
             }
@@ -1159,6 +1394,13 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
                 case 'delete':
                     this._data!.items.delete(entry.id);
                     break;
+                case 'deleteMultiple':
+                    if (entry.data && entry.data.ids) {
+                        for (const id of entry.data.ids) {
+                            this._data!.items.delete(id);
+                        }
+                    }
+                    break;
             }
         });
         
@@ -1380,6 +1622,118 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
         }
         
         return result;
+    }
+
+    /**
+     * Configure vector validation options.
+     * @param options Vector validation options to set
+     */
+    public async setVectorOptions(options: VectorValidationOptions): Promise<void> {
+        await this.loadIndexData();
+        
+        // Update in-memory options
+        this._vectorOptions = { ...this._vectorOptions, ...options };
+        
+        // Update stored options
+        if (this._data) {
+            await this.beginUpdate();
+            try {
+                this._update!.vectorOptions = this._vectorOptions;
+                await this.endUpdate();
+            } catch (err) {
+                await this.cancelUpdate();
+                throw err;
+            }
+        }
+    }
+
+    /**
+     * Configure metadata validation options.
+     * @param options Metadata validation options to set
+     */
+    public async setMetadataOptions(options: { 
+        maxFieldLength?: number;
+        maxFields?: number; 
+        validateOnInsert?: boolean;
+        schemaValidation?: MetadataSchema;
+    }): Promise<void> {
+        await this.loadIndexData();
+        
+        // Update schema if provided
+        if (options.schemaValidation) {
+            this._metadataSchema = options.schemaValidation;
+        }
+        
+        // Update metadata config
+        if (this._data) {
+            await this.beginUpdate();
+            try {
+                if (options.schemaValidation) {
+                    this._update!.metadata_config.schema = options.schemaValidation;
+                }
+                // Note: Other options like maxFieldLength, maxFields would need to be added to metadata_config type
+                await this.endUpdate();
+            } catch (err) {
+                await this.cancelUpdate();
+                throw err;
+            }
+        }
+    }
+
+    /**
+     * Configure data integrity options.
+     * @param options Data integrity options to set
+     */
+    public async setDataIntegrityOptions(options: DataIntegrityOptions): Promise<void> {
+        // Data integrity options are typically used at runtime, not stored
+        // This method provides a consistent API for configuration
+        
+        // Store options for future operations
+        this._dataIntegrityOptions = { ...this._dataIntegrityOptions, ...options };
+        
+        // If validation is requested, update checksums
+        if (options.validateChecksums) {
+            await this.updateChecksums();
+        }
+    }
+
+    /**
+     * Enable write-ahead logging on an existing index.
+     * @param options WAL configuration options
+     */
+    public async enableWAL(options?: WALOptions): Promise<void> {
+        if (this._walEnabled) {
+            throw new Error('WAL is already enabled for this index');
+        }
+        
+        await this.loadIndexData();
+        
+        // Initialize WAL
+        this._wal = await walManager.getWAL(this._folderPath, options);
+        this._walEnabled = true;
+        
+        // Update index to indicate WAL is enabled
+        if (this._data) {
+            await this.beginUpdate();
+            try {
+                this._update!.wal = true;
+                await this.endUpdate();
+            } catch (err) {
+                await this.cancelUpdate();
+                // Clean up WAL on error
+                await walManager.closeWAL(this._folderPath);
+                this._wal = undefined;
+                this._walEnabled = false;
+                throw err;
+            }
+        }
+    }
+
+    /**
+     * Get WAL statistics (alias for getWALStats for API consistency).
+     */
+    public async getWALStatistics(): Promise<WALStats> {
+        return this.getWALStats();
     }
 }
 

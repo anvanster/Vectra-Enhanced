@@ -1,0 +1,47 @@
+{
+  "dimensions": 4,
+  "distanceMetric": "cosine",
+  "elementCount": 4,
+  "capacity": 10000,
+  "checksum": "e87e8fcc7a4656bafd3d053f1cb5db80bf9a98d11cdb5800909690604e0efa5d",
+  "lastSaved": 1752483452324,
+  "nextLabel": 4,
+  "mappings": {
+    "itemIdToLabel": [
+      [
+        "188749b1-66a5-4b07-9b26-c4bb4f44a38b",
+        0
+      ],
+      [
+        "7ecb9d46-3fa1-4434-ad65-6aea4d6ef83d",
+        1
+      ],
+      [
+        "55d0d383-8ba6-4310-b68b-2065bbbf3be9",
+        2
+      ],
+      [
+        "b4540992-6061-4ec3-b1e3-600a5b1c09f5",
+        3
+      ]
+    ],
+    "labelToItemId": [
+      [
+        0,
+        "188749b1-66a5-4b07-9b26-c4bb4f44a38b"
+      ],
+      [
+        1,
+        "7ecb9d46-3fa1-4434-ad65-6aea4d6ef83d"
+      ],
+      [
+        2,
+        "55d0d383-8ba6-4310-b68b-2065bbbf3be9"
+      ],
+      [
+        3,
+        "b4540992-6061-4ec3-b1e3-600a5b1c09f5"
+      ]
+    ]
+  }
+}

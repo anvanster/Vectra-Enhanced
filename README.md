@@ -24,12 +24,6 @@ Vectra is designed for scenarios where you have a corpus of mostly static data t
 - 🔄 **Atomic operations** - Safe multi-process concurrent access
 - ✅ **Data integrity** - Checksum verification and automatic repair capabilities
 
-## Other Language Bindings
-
-This repo contains the TypeScript/JavaScript binding for Vectra but other language bindings are being created. Since Vectra is file based, any language binding can be used to read or write a Vectra index. That means you can build a Vectra index using JS and then read it using Python.
-
--   [vectra-py](https://github.com/BMS-geodev/vectra-py) - Python version of Vectra.
-
 ## Installation
 
 ```
@@ -259,6 +253,20 @@ const walStats = await index.getWALStatistics();
 console.log(`WAL entries: ${walStats.entryCount}`);
 console.log(`WAL size: ${walStats.totalSize} bytes`);
 ```
+
+## Backward Compatibility
+
+Vectra Enhanced maintains **full backward compatibility** with the original Vectra API. Existing code using the original Vectra will work without modification:
+
+```typescript
+// Original Vectra syntax still works:
+const results = await index.queryItems(vector, topK, filter);
+
+// New enhanced syntax with text search:
+const results = await index.queryItems(vector, query, topK, filter);
+```
+
+Simply change your import from `'vectra'` to `'vectra-enhanced'` and your existing code will continue to work while gaining access to all the new features.
 
 ## API Reference
 

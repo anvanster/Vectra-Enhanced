@@ -188,5 +188,5 @@ See the main README.md for contribution guidelines.
 ## Support
 
 For issues and questions:
-- GitHub Issues: [github.com/stevenic/vectra](https://github.com/stevenic/vectra)
+- GitHub Issues: [github.com/avanster/vectra-enhanced](https://github.com/anvanster/vectra-enhanced)
 - Documentation: This guide

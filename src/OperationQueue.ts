@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 export interface QueuedOperation<T = any> {
     id: string;
-    type: 'insert' | 'update' | 'delete' | 'custom';
+    type: 'insert' | 'update' | 'delete' | 'deleteMultiple' | 'custom';
     data: T;
     priority: number;
     timestamp: number;

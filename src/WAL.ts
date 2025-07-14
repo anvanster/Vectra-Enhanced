@@ -10,7 +10,7 @@ import { lockManager } from './LockManager';
 export interface WALEntry {
     id: string;
     timestamp: number;
-    operation: 'insert' | 'update' | 'delete';
+    operation: 'insert' | 'update' | 'delete' | 'deleteMultiple';
     data: any;
     checksum?: string;
 }
