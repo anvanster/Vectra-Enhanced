@@ -10,3 +10,6 @@ export * from './TextSplitter';
 export * from './types';
 export * from './WebFetcher';
 export * from './LazyIndex';
+export * from './DataIntegrity';
+export * from './ErrorHandler';
+export * from './LocalIndexWithErrorHandling';

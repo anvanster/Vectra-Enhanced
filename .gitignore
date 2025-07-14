@@ -108,3 +108,20 @@ dist
 
 # TernJS port file
 .tern-port
+
+# Test artifacts
+test-results.json
+errors.log
+*.tmp
+
+# Temporary implementation docs (already moved to proper docs)
+*_IMPLEMENTATION.md
+MITIGATION_PLAN.md
+
+# Test indexes
+tests/test-*
+tests/**/test-*
+
+# IDE
+.idea/
+*.iml

@@ -131,6 +131,7 @@ describe('Concurrency Tests', function() {
         await index.createIndex({ version: 1 });
         
         const vectorCount = 20;
+        await index.beginUpdate();
         for (let i = 0; i < vectorCount; i++) {
             await index.insertItem({
                 id: `vector-${i}`,
@@ -138,14 +139,18 @@ describe('Concurrency Tests', function() {
                 metadata: { index: i }
             });
         }
+        await index.endUpdate();
 
+        // Create a fresh index instance to ensure data is loaded
+        const queryIndex = new LocalIndex(testIndexPath);
+        
         // Perform multiple concurrent queries
         const queryPromises: Promise<any>[] = [];
         const queryVector = [0.5, 0.5, 0.5];
         
         for (let i = 0; i < 10; i++) {
             queryPromises.push(
-                index.queryItems(queryVector, '', 5)
+                queryIndex.queryItems(queryVector, '', 5)
             );
         }
 

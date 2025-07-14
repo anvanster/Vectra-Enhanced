@@ -148,10 +148,11 @@ describe('Cleanup Tests', function() {
 
             expect(stats.orphanedFilesDeleted).to.be.at.least(3);
             
-            // Verify operations log is empty
+            // Verify operations log has been compacted to only contain remaining items
             const logPath = path.join(testIndexPath, 'operations.log');
             const logContent = await fs.readFile(logPath, 'utf-8');
-            expect(logContent.trim()).to.equal('');
+            const entries = logContent.trim().split('\n').filter(line => line);
+            expect(entries.length).to.equal(5); // Should have 5 remaining items
         });
     });
 

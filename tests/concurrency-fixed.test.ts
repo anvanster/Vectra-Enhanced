@@ -170,24 +170,34 @@ describe('Fixed Concurrency Tests', function() {
         const index1 = new LocalIndex(testIndexPath);
         const index2 = new LocalIndex(testIndexPath);
 
-        // Both try to write
-        const write1 = index1.insertItem({
-            id: 'process-1-item',
-            vector: [1, 1, 1],
-            metadata: { process: 1 }
-        });
+        // Both try to write with proper update transactions
+        const write1 = async () => {
+            await index1.beginUpdate();
+            await index1.insertItem({
+                id: 'process-1-item',
+                vector: [1, 1, 1],
+                metadata: { process: 1 }
+            });
+            await index1.endUpdate();
+        };
 
-        const write2 = index2.insertItem({
-            id: 'process-2-item',
-            vector: [2, 2, 2],
-            metadata: { process: 2 }
-        });
+        const write2 = async () => {
+            await index2.beginUpdate();
+            await index2.insertItem({
+                id: 'process-2-item',
+                vector: [2, 2, 2],
+                metadata: { process: 2 }
+            });
+            await index2.endUpdate();
+        };
 
         // Both should succeed
-        await Promise.all([write1, write2]);
+        await Promise.all([write1(), write2()]);
 
-        // Verify both items exist
-        const items = await index.listItems();
+        // Verify both items exist - need to use a fresh index instance
+        // to ensure we read the latest data from disk
+        const verifyIndex = new LocalIndex(testIndexPath);
+        const items = await verifyIndex.listItems();
         expect(items.length).to.equal(2);
     });
 });

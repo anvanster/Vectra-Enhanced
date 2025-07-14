@@ -18,6 +18,8 @@ import { LazyIndex, LazyIndexOptions } from './LazyIndex';
 import { WAL, WALEntry, WALOptions, walManager } from './WAL';
 import { OperationsLog, OperationLogOptions, operationsLogManager, CompactionResult } from './OperationsLog';
 import { HNSWManager, HNSWOptions, hnswIndexManager } from './HNSWManager';
+import { DataIntegrity, IntegrityCheckResult, DataIntegrityOptions, dataIntegrity } from './DataIntegrity';
+import { ErrorHandler, errorHandler, ErrorContext, VectraError, ErrorSeverity, ErrorCategory } from './ErrorHandler';
 
 export interface CreateIndexConfig {
     version: number;
@@ -1284,6 +1286,100 @@ export class LocalIndex<TMetadata extends Record<string,MetadataTypes> = Record<
         
         await this._hnswManager.optimize(ef);
         console.log('HNSW index optimized');
+    }
+
+    /**
+     * Verify data integrity
+     */
+    public async verifyIntegrity(options?: DataIntegrityOptions): Promise<IntegrityCheckResult> {
+        return await dataIntegrity.verifyIndexIntegrity(this._folderPath, options);
+    }
+
+    /**
+     * Generate integrity report
+     */
+    public async generateIntegrityReport(options?: DataIntegrityOptions): Promise<string> {
+        return await dataIntegrity.generateIntegrityReport(this._folderPath, options);
+    }
+
+    /**
+     * Repair index if possible
+     */
+    public async repairIndex(options?: DataIntegrityOptions): Promise<{ repaired: boolean; actions: string[] }> {
+        return await dataIntegrity.repairIndex(this._folderPath, { ...options, repairMode: true });
+    }
+
+    /**
+     * Calculate and store checksums for all components
+     */
+    public async updateChecksums(): Promise<void> {
+        await this.loadIndexData();
+        
+        // Create checksums file
+        const checksums: Record<string, string> = {};
+        
+        // Calculate index checksum
+        checksums.index = dataIntegrity.calculateIndexChecksum(this._data!.items);
+        
+        // Calculate metadata checksums
+        for (const [id, item] of this._data!.items) {
+            if (item.metadataFile) {
+                const metadataPath = path.join(this._folderPath, item.metadataFile);
+                try {
+                    checksums[`metadata.${id}`] = await dataIntegrity.calculateFileChecksum(metadataPath);
+                } catch (err) {
+                    // Ignore missing files
+                }
+            }
+        }
+        
+        // Store checksums
+        const checksumsPath = path.join(this._folderPath, '.checksums.json');
+        await AtomicOperations.writeFile(checksumsPath, JSON.stringify(checksums, null, 2));
+    }
+
+    /**
+     * Verify stored checksums
+     */
+    public async verifyChecksums(): Promise<{ valid: boolean; mismatches: string[] }> {
+        const result = { valid: true, mismatches: [] as string[] };
+        
+        try {
+            const checksumsPath = path.join(this._folderPath, '.checksums.json');
+            const storedData = await fs.readFile(checksumsPath, 'utf-8');
+            const stored = JSON.parse(storedData);
+            
+            await this.loadIndexData();
+            
+            // Verify index checksum
+            const currentIndexChecksum = dataIntegrity.calculateIndexChecksum(this._data!.items);
+            if (stored.index !== currentIndexChecksum) {
+                result.valid = false;
+                result.mismatches.push('index');
+            }
+            
+            // Verify metadata checksums
+            for (const [id, item] of this._data!.items) {
+                if (item.metadataFile && stored[`metadata.${id}`]) {
+                    const metadataPath = path.join(this._folderPath, item.metadataFile);
+                    try {
+                        const currentChecksum = await dataIntegrity.calculateFileChecksum(metadataPath);
+                        if (stored[`metadata.${id}`] !== currentChecksum) {
+                            result.valid = false;
+                            result.mismatches.push(`metadata.${id}`);
+                        }
+                    } catch (err) {
+                        result.valid = false;
+                        result.mismatches.push(`metadata.${id} (missing)`);
+                    }
+                }
+            }
+        } catch (err) {
+            result.valid = false;
+            result.mismatches.push('checksums file not found or invalid');
+        }
+        
+        return result;
     }
 }
 

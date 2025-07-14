@@ -1,0 +1,20 @@
+Vectra Enhanced
+Copyright (c) 2025 Andrey Vasilevsky
+
+This software is based on Vectra by Steven Ickman
+Original project: https://github.com/Stevenic/vectra
+Original copyright: Copyright (c) 2023 Steven Ickman
+Original license: MIT
+
+This enhanced version includes significant improvements:
+- HNSW (Hierarchical Navigable Small World) indexing for O(log n) search
+- Write-Ahead Logging (WAL) for crash recovery
+- Comprehensive error handling with automatic recovery
+- Data integrity verification with SHA-256 checksums
+- Multi-process safe file-based locking
+- Atomic write operations
+- Memory-efficient lazy loading
+- And many more production-ready features
+
+The enhanced version maintains API compatibility with the original Vectra
+while adding new capabilities for production use.

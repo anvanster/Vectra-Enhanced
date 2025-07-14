@@ -1,18 +1,21 @@
 {
-    "name": "vectra",
-    "author": "Steven Ickman",
-    "description": "A vector database that uses the local file system for storage.",
-    "version": "0.11.1",
+    "name": "vectra-enhanced",
+    "author": "Andrey Vasilevsky",
+    "contributors": [
+        "Steven Ickman (original Vectra author)"
+    ],
+    "description": "Enhanced vector database with HNSW indexing, WAL, error recovery, and production-ready features. Based on Vectra by Steven Ickman.",
+    "version": "1.0.0",
     "license": "MIT",
     "keywords": [
         "gpt"
     ],
     "bugs": {
-        "url": "https://github.com/Stevenic/vectra/issues"
+        "url": "https://github.com/anvanster/vectra-enhanced/issues"
     },
     "repository": {
         "type": "git",
-        "url": "https://github.com/Stevenic/vectra.git"
+        "url": "https://github.com/anvanster/vectra-enhanced.git"
     },
     "main": "./lib/index.js",
     "types": "./lib/index.d.ts",
