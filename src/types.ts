@@ -1,5 +1,7 @@
 
 
+export type DistanceMetric = 'cosine' | 'l2' | 'ip';
+
 /**
  * An AI model that can be used to create embeddings.
  */
@@ -136,6 +138,11 @@ export interface MetadataFilter {
      * OR (MetadataFilter[])
      */
     '$or'?: MetadataFilter[];
+
+    /**
+     * NOT (MetadataFilter)
+     */
+    '$not'?: MetadataFilter;
 
     [key: string]: unknown;
 }

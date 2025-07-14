@@ -23,6 +23,50 @@ export async function run() {
             const index = new LocalDocumentIndex({ folderPath });
             await index.deleteIndex();
         })
+        .command('compact <index>', `compacts an existing local index`, {}, async (args) => {
+            const folderPath = args.index as string;
+            console.log(Colorize.output(`compacting index at ${folderPath}`));
+            const index = new LocalDocumentIndex({ folderPath });
+            const stats = await index.compact();
+            console.log(Colorize.success(`Compaction complete. Cleaned up ${stats.orphanedFilesDeleted} orphaned files, reclaimed ${stats.bytesReclaimed} bytes`));
+        })
+        .command('cleanup <index>', `cleanup orphaned metadata files`, {}, async (args) => {
+            const folderPath = args.index as string;
+            console.log(Colorize.output(`cleaning up index at ${folderPath}`));
+            const index = new LocalDocumentIndex({ folderPath });
+            const stats = await index.cleanup();
+            console.log(Colorize.success(`Cleanup complete. Deleted ${stats.orphanedFilesDeleted} orphaned files, reclaimed ${stats.bytesReclaimed} bytes`));
+            if (stats.errors.length > 0) {
+                console.log(Colorize.error(`Errors: ${stats.errors.join(', ')}`));
+            }
+        })
+        .command('validate <index>', `validate metadata file integrity`, {}, async (args) => {
+            const folderPath = args.index as string;
+            console.log(Colorize.output(`validating index at ${folderPath}`));
+            const index = new LocalDocumentIndex({ folderPath });
+            const missing = await index.validateMetadataFiles();
+            if (missing.length === 0) {
+                console.log(Colorize.success('All metadata files are valid'));
+            } else {
+                console.log(Colorize.error(`Found ${missing.length} missing metadata files:`));
+                missing.forEach(m => console.log(Colorize.error(`  - ${m}`)));
+            }
+        })
+        .command('convert-lazy <index>', `convert index to lazy loading format`, (yargs) => {
+            return yargs
+                .option('chunk-size', {
+                    alias: 'cs',
+                    describe: 'number of items per chunk (defaults to 1000)',
+                    type: 'number',
+                    default: 1000
+                });
+        }, async (args) => {
+            const folderPath = args.index as string;
+            console.log(Colorize.output(`converting index at ${folderPath} to lazy format`));
+            const index = new LocalDocumentIndex({ folderPath });
+            await index.convertToLazy(args.chunkSize);
+            console.log(Colorize.success('Index converted to lazy format successfully'));
+        })
         .command('add <index>', `adds one or more web pages to an index`, (yargs) => {
             return yargs
                 .option('keys', {

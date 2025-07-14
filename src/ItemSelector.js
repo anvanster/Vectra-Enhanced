@@ -1,17 +1,19 @@
-import { MetadataFilter, MetadataTypes } from './types';
-
-export class ItemSelector {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ItemSelector = void 0;
+var ItemSelector = /** @class */ (function () {
+    function ItemSelector() {
+    }
     /**
      * Returns the similarity between two vectors using the cosine similarity.
      * @param vector1 Vector 1
      * @param vector2 Vector 2
      * @returns Similarity between the two vectors
      */
-    public static cosineSimilarity(vector1: number[], vector2: number[]) {
+    ItemSelector.cosineSimilarity = function (vector1, vector2) {
         // Return the quotient of the dot product and the product of the norms
         return this.dotProduct(vector1, vector2) / (this.normalize(vector1) * this.normalize(vector2));
-    }
-
+    };
     /**
      * Normalizes a vector.
      * @remarks
@@ -20,18 +22,17 @@ export class ItemSelector {
      * @param vector Vector to normalize
      * @returns Normalized vector
      */
-    public static normalize(vector: number[]) {
+    ItemSelector.normalize = function (vector) {
         // Initialize a variable to store the sum of the squares
-        let sum = 0;
+        var sum = 0;
         // Loop through the elements of the array
-        for (let i = 0; i < vector.length; i++) {
+        for (var i = 0; i < vector.length; i++) {
             // Square the element and add it to the sum
             sum += vector[i] * vector[i];
         }
         // Return the square root of the sum
         return Math.sqrt(sum);
-    }
-
+    };
     /**
      * Returns the similarity between two vectors using cosine similarity.
      * @remarks
@@ -43,39 +44,40 @@ export class ItemSelector {
      * @param norm2 Norm of vector 2
      * @returns Similarity between the two vectors
      */
-    public static normalizedCosineSimilarity(vector1: number[], norm1: number, vector2: number[], norm2: number) {
+    ItemSelector.normalizedCosineSimilarity = function (vector1, norm1, vector2, norm2) {
         // Return the quotient of the dot product and the product of the norms
         return this.dotProduct(vector1, vector2) / (norm1 * norm2);
-    }
-
+    };
     /**
      * Applies a filter to the metadata of an item.
      * @param metadata Metadata of the item
      * @param filter Filter to apply
      * @returns True if the item matches the filter, false otherwise
      */
-    public static select(metadata: Record<string, MetadataTypes>, filter: MetadataFilter): boolean {
+    ItemSelector.select = function (metadata, filter) {
+        var _this = this;
         if (filter === undefined || filter === null) {
             return true;
         }
-
-        for (const key in filter) {
+        for (var key in filter) {
             switch (key) {
                 case '$and':
-                    return filter[key]!.every((f: MetadataFilter) => this.select(metadata, f));
+                    return filter[key].every(function (f) { return _this.select(metadata, f); });
                 case '$or':
-                    return filter[key]!.some((f: MetadataFilter) => this.select(metadata, f));
+                    return filter[key].some(function (f) { return _this.select(metadata, f); });
                 case '$not':
-                    return !this.select(metadata, filter[key]! as MetadataFilter);
+                    return !this.select(metadata, filter[key]);
                 default:
-                    const value = filter[key];
+                    var value = filter[key];
                     if (value === undefined || value === null) {
                         return false;
-                    } else if (typeof value == 'object') {
-                        if (!this.metadataFilter(metadata[key], value as MetadataFilter)) {
+                    }
+                    else if (typeof value == 'object') {
+                        if (!this.metadataFilter(metadata[key], value)) {
                             return false;
                         }
-                    } else {
+                    }
+                    else {
                         if (metadata[key] !== value) {
                             return false;
                         }
@@ -84,26 +86,23 @@ export class ItemSelector {
             }
         }
         return true;
-    }
-
-    private static dotProduct(arr1: number[], arr2: number[]) {
+    };
+    ItemSelector.dotProduct = function (arr1, arr2) {
         // Initialize a variable to store the sum of the products
-        let sum = 0;
+        var sum = 0;
         // Loop through the elements of the arrays
-        for (let i = 0; i < arr1.length; i++) {
+        for (var i = 0; i < arr1.length; i++) {
             // Multiply the corresponding elements and add them to the sum
             sum += arr1[i] * arr2[i];
         }
         // Return the sum
         return sum;
-    }
-
-    private static metadataFilter(value: MetadataTypes, filter: MetadataFilter): boolean {
+    };
+    ItemSelector.metadataFilter = function (value, filter) {
         if (value === undefined || value === null) {
             return false;
         }
-
-        for (const key in filter) {
+        for (var key in filter) {
             switch (key) {
                 case '$eq':
                     if (value !== filter[key]) {
@@ -116,42 +115,44 @@ export class ItemSelector {
                     }
                     break;
                 case '$gt':
-                    if (typeof value != 'number' || value <= filter[key]!) {
+                    if (typeof value != 'number' || value <= filter[key]) {
                         return false;
                     }
                     break;
                 case '$gte':
-                    if (typeof value != 'number' || value < filter[key]!) {
+                    if (typeof value != 'number' || value < filter[key]) {
                         return false;
                     }
                     break;
                 case '$lt':
-                    if (typeof value != 'number' || value >= filter[key]!) {
+                    if (typeof value != 'number' || value >= filter[key]) {
                         return false;
                     }
                     break;
                 case '$lte':
-                    if (typeof value != 'number' || value > filter[key]!) {
+                    if (typeof value != 'number' || value > filter[key]) {
                         return false;
                     }
                     break;
                 case '$in':
                     if (typeof value == 'boolean') {
                         return false;
-                    } else if(typeof value == 'string' && !filter[key]!.includes(value)){
-                        return false
-                    } else if(!filter[key]!.some(val => typeof val == 'string' && val.includes(value as string))){
-                        return false
+                    }
+                    else if (typeof value == 'string' && !filter[key].includes(value)) {
+                        return false;
+                    }
+                    else if (!filter[key].some(function (val) { return typeof val == 'string' && val.includes(value); })) {
+                        return false;
                     }
                     break;
                 case '$nin':
                     if (typeof value == 'boolean') {
                         return false;
                     }
-                    else if (typeof value == 'string' && filter[key]!.includes(value)) {
+                    else if (typeof value == 'string' && filter[key].includes(value)) {
                         return false;
                     }
-                    else if (filter[key]!.some(val => typeof val == 'string' && val.includes(value as string))) {
+                    else if (filter[key].some(function (val) { return typeof val == 'string' && val.includes(value); })) {
                         return false;
                     }
                     break;
@@ -160,5 +161,7 @@ export class ItemSelector {
             }
         }
         return true;
-    }
-}
+    };
+    return ItemSelector;
+}());
+exports.ItemSelector = ItemSelector;

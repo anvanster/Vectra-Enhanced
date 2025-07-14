@@ -416,8 +416,8 @@ export class LocalDocumentIndex extends LocalIndex<DocumentChunkMetadata> {
         this._newCatalog = Object.assign({}, this._catalog);
     }
 
-    public cancelUpdate(): void {
-        super.cancelUpdate();
+    public async cancelUpdate(): Promise<void> {
+        await super.cancelUpdate();
         this._newCatalog = undefined;
     }
 
