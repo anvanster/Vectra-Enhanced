@@ -17,4 +17,4 @@ This enhanced version includes significant improvements:
 - And many more production-ready features
 
 The enhanced version maintains API compatibility with the original Vectra
-while adding new capabilities for production use.
+while adding new capabilities for production use except for cancelUpdate(). It changed from sync to async - this is the only breaking change that cannot be fixed without breaking the locking mechanism.

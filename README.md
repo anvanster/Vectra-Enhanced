@@ -10,6 +10,8 @@ Vectra uses HNSW (Hierarchical Navigable Small World) algorithm for fast approxi
 
 Vectra is designed for scenarios where you have a corpus of mostly static data that you'd like to include in your prompts. It's perfect for knowledge bases, document collections, or any scenario where you need fast local vector search without external dependencies.
 
+Requires OpenAI API_KEY for embeddings.
+
 ## Features
 
 - 🔍 **Local vector storage** - Stores vectors on disk for easy persistence
