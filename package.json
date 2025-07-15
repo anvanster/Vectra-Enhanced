@@ -93,6 +93,7 @@
         "chai": "^5.2.1",
         "mocha": "11.2.2",
         "nyc": "^17.1.0",
+        "rimraf": "^6.0.1",
         "shx": "^0.4.0",
         "ts-mocha": "11.1.0",
         "typescript": "^5.8.3",
@@ -103,11 +104,14 @@
         "build-docs": "typedoc --theme markdown --entryPoint botbuilder-m365 --excludePrivate --includeDeclarations --ignoreCompilerErrors --module amd --out ..\\..\\doc\\botbuilder-ai .\\lib\\index.d.ts --hideGenerator --name \"Bot Builder SDK - AI\" --readme none",
         "build:rollup": "yarn clean && yarn build && api-extractor run --verbose --local",
         "clean": "rimraf _ts3.4 lib tsconfig.tsbuildinfo node_modules",
+        "clean:test": "rimraf .nyc_output coverage test-* *.log",
+        "clean:all": "npm run clean && npm run clean:test",
         "depcheck": "depcheck --config ../../.depcheckrc",
         "lint": "eslint **/src/**/*.{j,t}s{,x} --fix --no-error-on-unmatched-pattern",
-        "test": "npm-run-all build test:mocha",
+        "test": "npm-run-all build test:mocha clean:test",
         "test:mocha": "nyc ts-mocha tests/**/*.ts",
-        "test:compat": "api-extractor run --verbose"
+        "test:compat": "api-extractor run --verbose",
+        "posttest": "npm run clean:test"
     },
     "files": [
         "_ts3.4",
