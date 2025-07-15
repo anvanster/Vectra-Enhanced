@@ -1,6 +1,7 @@
 .zip
 *.keys
 keys.*
+internal/
 
 # Logs
 logs

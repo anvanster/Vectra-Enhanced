@@ -13,3 +13,4 @@ export * from './LazyIndex';
 export * from './DataIntegrity';
 export * from './ErrorHandler';
 export * from './LocalIndexWithErrorHandling';
+export * from './PathValidator';
